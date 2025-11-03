@@ -98,7 +98,7 @@ func NewComponents(comps ...*Component) *Components {
 }
 
 // NewInvoke returns a new single Invoke Component.
-func NewInvoke(invID, lkID, opCode int, isLocal bool, param []byte) *Component {
+func NewInvoke(invID int, lkID int, opCode uint8, isLocal bool, param []byte) *Component {
 	c := &Component{
 		Type: NewContextSpecificConstructorTag(Invoke),
 		InvokeID: &IE{
@@ -128,7 +128,7 @@ func NewInvoke(invID, lkID, opCode int, isLocal bool, param []byte) *Component {
 }
 
 // NewReturnResult returns a new single ReturnResultLast or ReturnResultNotLast Component.
-func NewReturnResult(invID, opCode int, isLocal, isLast bool, param []byte) *Component {
+func NewReturnResult(invID int, opCode uint8, isLocal, isLast bool, param []byte) *Component {
 	tag := ReturnResultNotLast
 	if isLast {
 		tag = ReturnResultLast
@@ -158,7 +158,7 @@ func NewReturnResult(invID, opCode int, isLocal, isLast bool, param []byte) *Com
 }
 
 // NewReturnError returns a new single ReturnError Component.
-func NewReturnError(invID, errCode int, isLocal bool, param []byte) *Component {
+func NewReturnError(invID, errCode uint8, isLocal bool, param []byte) *Component {
 	c := &Component{
 		Type: NewContextSpecificConstructorTag(ReturnError),
 		InvokeID: &IE{
@@ -206,7 +206,7 @@ func NewReject(invID, problemType int, problemCode uint8, param []byte) *Compone
 }
 
 // NewOperationCode returns a Operation Code.
-func NewOperationCode(code int, isLocal bool) *IE {
+func NewOperationCode(code uint8, isLocal bool) *IE {
 	var tag = 6
 	if isLocal {
 		tag = 2
@@ -219,7 +219,7 @@ func NewOperationCode(code int, isLocal bool) *IE {
 }
 
 // NewErrorCode returns a Error Code.
-func NewErrorCode(code int, isLocal bool) *IE {
+func NewErrorCode(code uint8, isLocal bool) *IE {
 	return NewOperationCode(code, isLocal)
 }
 

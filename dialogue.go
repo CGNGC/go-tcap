@@ -109,7 +109,7 @@ func ParseDialogue(b []byte) (*Dialogue, error) {
 }
 
 // UnmarshalBinary sets the values retrieved from byte sequence in an Dialogue.
-func (d *Dialogue) UnmarshalBinary(b []byte) error {
+/*func (d *Dialogue) UnmarshalBinary(b []byte) error {
 	l := len(b)
 	if l < 5 {
 		return io.ErrUnexpectedEOF
@@ -140,6 +140,83 @@ func (d *Dialogue) UnmarshalBinary(b []byte) error {
 	}
 
 	d.Payload = b[offset:]
+
+	return nil
+}
+*/
+func (d *Dialogue) UnmarshalBinary(b []byte) error {
+	l := len(b)
+	if l < 5 {
+		return io.ErrUnexpectedEOF
+	}
+
+	d.Tag = Tag(b[0])
+	d.Length = b[1]
+
+	// Validate that we have enough data for the declared length
+	if int(d.Length)+2 > l {
+		return io.ErrUnexpectedEOF
+	}
+
+	d.ExternalTag = Tag(b[2])
+	d.ExternalLength = b[3]
+
+	// Validate external length
+	if int(d.ExternalLength)+4 > l {
+		return io.ErrUnexpectedEOF
+	}
+
+	var err error
+	var offset = 4
+
+	// Parse ObjectIdentifier with bounds checking
+	if offset >= l {
+		return io.ErrUnexpectedEOF
+	}
+
+	d.ObjectIdentifier, err = ParseIE(b[offset:])
+	if err != nil {
+		return fmt.Errorf("failed to parse ObjectIdentifier: %w", err)
+	}
+
+	objIdLen := d.ObjectIdentifier.MarshalLen()
+	if offset+objIdLen > l {
+		return io.ErrUnexpectedEOF
+	}
+	offset += objIdLen
+
+	// Parse SingleAsn1Type with bounds checking
+	if offset >= l {
+		return io.ErrUnexpectedEOF
+	}
+
+	d.SingleAsn1Type, err = ParseIE(b[offset:])
+	if err != nil {
+		return fmt.Errorf("failed to parse SingleAsn1Type: %w", err)
+	}
+
+	singleAsnLen := d.SingleAsn1Type.MarshalLen()
+	if offset+singleAsnLen > l {
+		return io.ErrUnexpectedEOF
+	}
+	offset += singleAsnLen
+
+	// Parse DialoguePDU with error handling
+	if d.SingleAsn1Type.Value != nil && len(d.SingleAsn1Type.Value) > 0 {
+		d.DialoguePDU, err = ParseDialoguePDU(d.SingleAsn1Type.Value)
+		if err != nil {
+			// Log the error but don't fail completely - some dialogues might not have valid PDU
+			fmt.Printf("Warning: failed to parse DialoguePDU: %v\n", err)
+			d.DialoguePDU = nil
+		}
+	}
+
+	// Set remaining payload
+	if offset < l {
+		d.Payload = b[offset:]
+	} else {
+		d.Payload = nil
+	}
 
 	return nil
 }
