@@ -8,3 +8,5 @@ github.com/wmnsk/go-m3ua v0.1.9 h1:3dhHT63HQ9CVFRwqKrHi54nIonHbRDnuYPIhLnUQ4Pg=
 github.com/wmnsk/go-m3ua v0.1.9/go.mod h1:OtE8HG+xgrjwmdVbXI+x4Xkm4HtdhDha+Ztbb/H8HSQ=
 github.com/wmnsk/go-sccp v0.0.2 h1:OC4yX+95H6HstxXdxHzHy7ByNWAHErUhf1E2DZ7t5Gs=
 github.com/wmnsk/go-sccp v0.0.2/go.mod h1:u3PWZ/bd3SqWQbeopgSvd4W3ILI9D4O/1GkYIJ3xXoU=
+github.com/wmnsk/go-tcap v0.0.0-20250507162811-c749d15c5937 h1:KkyrPwwMe/2+9kc0Gc2ErB/+F0O0DXXNgZOnm5awtkY=
+github.com/wmnsk/go-tcap v0.0.0-20250507162811-c749d15c5937/go.mod h1:NtDTOxP87TNuIKkh/xe1UF2ZwYaieO+7l2olVTGhD+w=
