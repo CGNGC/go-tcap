@@ -23,7 +23,7 @@ type TCAP struct {
 }
 
 // NewBeginInvoke creates a new TCAP of type Transaction=Begin, Component=Invoke.
-func NewBeginInvoke(otid uint32, invID, opCode int, payload []byte) *TCAP {
+func NewBeginInvoke(otid uint32, invID int, opCode uint8, payload []byte) *TCAP {
 	t := &TCAP{
 		Transaction: NewBegin(otid, []byte{}),
 		Components:  NewComponents(NewInvoke(invID, -1, opCode, true, payload)),
@@ -34,7 +34,7 @@ func NewBeginInvoke(otid uint32, invID, opCode int, payload []byte) *TCAP {
 }
 
 // NewBeginInvokeWithDialogue creates a new TCAP of type Transaction=Begin, Component=Invoke with Dialogue Portion.
-func NewBeginInvokeWithDialogue(otid uint32, dlgType, ctx, ctxver uint8, invID, opCode int, payload []byte) *TCAP {
+func NewBeginInvokeWithDialogue(otid uint32, dlgType, ctx, ctxver uint8, invID int, opCode uint8, payload []byte) *TCAP {
 	t := NewBeginInvoke(otid, invID, opCode, payload)
 	t.Dialogue = NewDialogue(dlgType, 1, NewAARQ(1, ctx, ctxver), []byte{})
 	t.SetLength()
@@ -43,7 +43,7 @@ func NewBeginInvokeWithDialogue(otid uint32, dlgType, ctx, ctxver uint8, invID, 
 }
 
 // NewContinueInvoke creates a new TCAP of type Transaction=Continue, Component=Invoke.
-func NewContinueInvoke(otid, dtid uint32, invID, opCode int, payload []byte) *TCAP {
+func NewContinueInvoke(otid, dtid uint32, invID int, opCode uint8, payload []byte) *TCAP {
 	t := &TCAP{
 		Transaction: NewContinue(otid, dtid, []byte{}),
 		Components:  NewComponents(NewInvoke(invID, -1, opCode, true, payload)),
@@ -54,20 +54,38 @@ func NewContinueInvoke(otid, dtid uint32, invID, opCode int, payload []byte) *TC
 }
 
 // NewEndReturnResult creates a new TCAP of type Transaction=End, Component=ReturnResult.
-func NewEndReturnResult(dtid uint32, invID, opCode int, isLast bool, payload []byte) *TCAP {
+func NewEndReturnResult(dtid uint32, invID int, opCode uint8, isLast bool, payload []byte) *TCAP {
 	t := &TCAP{
-		Transaction: NewEnd(dtid, []byte{}),
+		Transaction: NewEnd(dtid, []byte{}), // Use the actual dtid parameter
 		Components:  NewComponents(NewReturnResult(invID, opCode, true, isLast, payload)),
 	}
+	t.SetLength()
+	return t
+}
+
+// NewEndReturnResultWithDialogue creates a new TCAP of type Transaction=End, Component=ReturnResult with Dialogue Portion.
+func NewEndReturnResultWithDialogue(dtid uint32, dlgType, ctx, ctxver uint8, invID int, opCode uint8, isLast bool, payload []byte) *TCAP {
+	t := NewEndReturnResult(dtid, invID, opCode, isLast, payload)
+	t.Dialogue = NewDialogue(dlgType, 1, NewAARE(ctx, ctxver, Accepted, DialogueServiceUser, Null), []byte{})
 	t.SetLength()
 
 	return t
 }
 
-// NewEndReturnResultWithDialogue creates a new TCAP of type Transaction=End, Component=ReturnResult with Dialogue Portion.
-func NewEndReturnResultWithDialogue(dtid uint32, dlgType, ctx, ctxver uint8, invID, opCode int, isLast bool, payload []byte) *TCAP {
-	t := NewEndReturnResult(dtid, invID, opCode, isLast, payload)
-	t.Dialogue = NewDialogue(dlgType, 1, NewAARE(1, ctx, ctxver, Accepted, DialogueServiceUser, Null), []byte{})
+// NewEndReturnError creates a new TCAP of type Transaction=End, Component=ReturnError.
+func NewEndReturnError(dtid uint32, invID int, errCode uint8, isLocal bool, payload []byte) *TCAP {
+	t := &TCAP{
+		Transaction: NewEnd(dtid, []byte{}), // Use the actual dtid parameter
+		Components:  NewComponents(NewReturnError(uint8(invID), errCode, isLocal, payload)),
+	}
+	t.SetLength()
+	return t
+}
+
+// NewEndReturnErrorWithDialogue creates a new TCAP of type Transaction=End, Component=ReturnError with Dialogue Portion.
+func NewEndReturnErrorWithDialogue(dtid uint32, dlgType, ctx, ctxver uint8, invID int, errCode uint8, isLocal bool, payload []byte) *TCAP {
+	t := NewEndReturnError(dtid, invID, errCode, isLocal, payload)
+	t.Dialogue = NewDialogue(dlgType, 1, NewAARE(ctx, ctxver, Accepted, DialogueServiceUser, Null), []byte{})
 	t.SetLength()
 
 	return t
@@ -111,7 +129,7 @@ func (t *TCAP) MarshalTo(b []byte) error {
 // Parse parses given byte sequence as a TCAP.
 func Parse(b []byte) (*TCAP, error) {
 	t := &TCAP{}
-	if err := t.UnmarshalBinary(b); err != nil {
+	if _, err := t.UnmarshalBinary(b); err != nil {
 		return nil, err
 	}
 
@@ -119,12 +137,13 @@ func Parse(b []byte) (*TCAP, error) {
 }
 
 // UnmarshalBinary sets the values retrieved from byte sequence in a TCAP.
-func (t *TCAP) UnmarshalBinary(b []byte) error {
+/*func (t *TCAP) UnmarshalBinary(b []byte) error {
 	var err error
 	var offset = 0
 
 	t.Transaction, err = ParseTransaction(b[offset:])
 	if err != nil {
+		fmt.Printf(" 1 tcap err returning from here")
 		return err
 	}
 	if len(t.Transaction.Payload) == 0 {
@@ -135,6 +154,7 @@ func (t *TCAP) UnmarshalBinary(b []byte) error {
 	case 0x6b:
 		t.Dialogue, err = ParseDialogue(t.Transaction.Payload)
 		if err != nil {
+			fmt.Printf(" tcap 2 err returning from here")
 			return err
 		}
 		if len(t.Dialogue.Payload) == 0 {
@@ -143,16 +163,130 @@ func (t *TCAP) UnmarshalBinary(b []byte) error {
 
 		t.Components, err = ParseComponents(t.Dialogue.Payload)
 		if err != nil {
+			fmt.Printf(" 3  tcap err returning from here")
 			return err
 		}
 	case 0x6c:
 		t.Components, err = ParseComponents(t.Transaction.Payload)
 		if err != nil {
+			fmt.Printf(" 4 tcap err returning from here")
 			return err
 		}
 	}
 
 	return nil
+}*/
+/*func (t *TCAP) UnmarshalBinary(b []byte) error {
+	var err error
+	var offset = 0
+
+	t.Transaction, err = ParseTransaction(b[offset:])
+	if err != nil {
+		fmt.Printf(" 1 tcap err returning from here")
+		return err
+	}
+	if len(t.Transaction.Payload) == 0 {
+		return nil
+	}
+
+	// Parse the payload sequentially
+	payload := t.Transaction.Payload
+	payloadOffset := 0
+
+	// Check for Component Portion first (0x6b)
+	if payload[payloadOffset] == 0x6b {
+		componentLength := int(payload[payloadOffset+1])
+
+		// Extract component data
+		componentData := payload[payloadOffset : payloadOffset+2+componentLength]
+		t.Components, err = ParseComponents(componentData)
+		if err != nil {
+			fmt.Printf(" 3 tcap err returning from here")
+			return err
+		}
+		payloadOffset += 2 + componentLength
+	}
+
+	// Check for Dialogue Portion (0xa0) after components
+	if payloadOffset < len(payload) && payload[payloadOffset] == 0xa0 {
+		dialogueLength := int(payload[payloadOffset+1])
+
+		// Extract dialogue data
+		dialogueData := payload[payloadOffset : payloadOffset+2+dialogueLength]
+		t.Dialogue, err = ParseDialogue(dialogueData)
+		if err != nil {
+			fmt.Printf(" 2 tcap err returning from here")
+			return err
+		}
+		payloadOffset += 2 + dialogueLength
+	}
+
+	// Check for User Information (0x6c) if present
+	if payloadOffset < len(payload) && payload[payloadOffset] == 0x6c {
+		userInfoData := payload[payloadOffset:]
+		// Handle user information if needed
+		// You can add parsing logic here if required
+		fmt.Printf(" MAP data parsed %+v", userInfoData)
+
+	}
+
+	return nil
+}*/
+// Change the function signature to return userInfoData
+func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
+	var err error
+	var offset = 0
+
+	t.Transaction, err = ParseTransaction(b[offset:])
+	if err != nil {
+		fmt.Printf(" 1 tcap err returning from here")
+		return nil, err
+	}
+	if len(t.Transaction.Payload) == 0 {
+		return nil, nil
+	}
+
+	// Parse the payload sequentially
+	payload := t.Transaction.Payload
+	payloadOffset := 0
+
+	// Check for Component Portion first (0x6b)
+	if payload[payloadOffset] == 0x6b {
+		componentLength := int(payload[payloadOffset+1])
+
+		// Extract component data
+		componentData := payload[payloadOffset : payloadOffset+2+componentLength]
+		t.Components, err = ParseComponents(componentData)
+		if err != nil {
+			fmt.Printf(" 3 tcap err returning from here")
+			return nil, err
+		}
+		payloadOffset += 2 + componentLength
+	}
+
+	// Check for Dialogue Portion (0xa0) after components
+	if payloadOffset < len(payload) && payload[payloadOffset] == 0xa0 {
+		dialogueLength := int(payload[payloadOffset+1])
+
+		// Extract dialogue data
+		dialogueData := payload[payloadOffset : payloadOffset+2+dialogueLength]
+		t.Dialogue, err = ParseDialogue(dialogueData)
+		if err != nil {
+			fmt.Printf(" 2 tcap err returning from here")
+			return nil, err
+		}
+		payloadOffset += 2 + dialogueLength
+	}
+
+	// Check for User Information (0x6c) if present and return it
+	if payloadOffset < len(payload) && payload[payloadOffset] == 0x6c {
+		userInfoData := payload[payloadOffset:]
+		fmt.Printf(" MAP data parsed %+v", userInfoData)
+		return userInfoData, nil // Return the user info data
+	}
+
+	// Return nil if no user info data found
+	return nil, nil
 }
 
 // ParseBer parses given byte sequence as a TCAP.

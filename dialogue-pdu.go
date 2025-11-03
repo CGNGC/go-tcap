@@ -195,13 +195,13 @@ func NewAARQ(protover int, context, contextver uint8, userinfo ...*IE) *Dialogue
 }
 
 // NewAARE returns a new AARE(Dialogue Response).
-func NewAARE(protover int, context, contextver, result uint8, diagsrc int, reason uint8, userinfo ...*IE) *DialoguePDU {
+func NewAARE(context, contextver, result uint8, diagsrc int, reason uint8, userinfo ...*IE) *DialoguePDU {
 	d := &DialoguePDU{
 		Type: NewApplicationWideConstructorTag(AARE),
-		ProtocolVersion: &IE{
+		/*ProtocolVersion: &IE{
 			Tag:   NewContextSpecificPrimitiveTag(0),
 			Value: []byte{0x07, uint8(protover << 7)}, // I don't actually know what the 0x07(padding) means...
-		},
+		},*/
 		ApplicationContextName: NewApplicationContextName(context, contextver),
 		Result:                 NewResult(result),
 		ResultSourceDiagnostic: NewResultSourceDiagnostic(diagsrc, reason),
