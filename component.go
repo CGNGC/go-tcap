@@ -470,6 +470,22 @@ func (c *Component) setParameterFromBytes(b []byte) error {
 	if b == nil {
 		return io.ErrUnexpectedEOF
 	}
+
+	if len(b) >= 2 && (b[0] >= 0xa0 && b[0] <= 0xaf) {
+		tag := b[0]
+		length := b[1]
+		value := b[2:]
+
+		c.Parameter = &IE{
+			Tag:    Tag(tag),
+			Length: length,
+			Value:  value,
+		}
+
+		logf("Extracted ASN.1 structure - Tag: 0x%02x, Length: 0x%02x, Value: %x", tag, length, value)
+		return nil
+	}
+
 	ies, err := ParseMultiIEs(b)
 	if err != nil {
 		logf("failed to parse given bytes, building it anyway: %v", err)
