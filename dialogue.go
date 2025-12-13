@@ -108,6 +108,109 @@ func ParseDialogue(b []byte) (*Dialogue, error) {
 	return d, nil
 }
 
+/*func ParseDialogue(b []byte) (*Dialogue, error) {
+	d := &Dialogue{}
+
+	if len(b) < 2 {
+		return nil, fmt.Errorf("dialogue data too short: %d bytes", len(b))
+	}
+
+	// Verify dialogue portion tag (0x6b)
+	if b[0] != 0x6b {
+		return nil, fmt.Errorf("invalid dialogue tag: 0x%02x", b[0])
+	}
+
+	// Parse length
+	offset := 1
+	var dialogueLength int
+
+	if b[offset]&0x80 == 0 {
+		dialogueLength = int(b[offset])
+		offset++
+	} else {
+		numOctets := int(b[offset] & 0x7F)
+		offset++
+		dialogueLength = 0
+		for i := 0; i < numOctets && offset < len(b); i++ {
+			dialogueLength = (dialogueLength << 8) | int(b[offset])
+			offset++
+		}
+	}
+
+	// Validate length
+	if offset+dialogueLength > len(b) {
+		return nil, fmt.Errorf("dialogue length mismatch: declared=%d, available=%d",
+			dialogueLength, len(b)-offset)
+	}
+
+	// Extract dialogue content
+	dialogueContent := b[offset : offset+dialogueLength]
+
+	// Check for External encoding (tag 0x28)
+	if len(dialogueContent) > 0 && dialogueContent[0] == 0x28 {
+		// Skip External wrapper and parse inner content
+		extOffset := 1
+
+		// Parse External length
+		if dialogueContent[extOffset]&0x80 == 0 {
+			extOffset++
+		} else {
+			numOctets := int(dialogueContent[extOffset] & 0x7F)
+			extOffset += 1 + numOctets
+		}
+
+		// Now parse the actual dialogue PDU
+		if extOffset < len(dialogueContent) {
+			return parseDialoguePDU(dialogueContent[extOffset:], d)
+		}
+	}
+
+	// Direct dialogue PDU (no External wrapper)
+	return parseDialoguePDU(dialogueContent, d)
+}
+
+func parseDialoguePDU(data []byte, d *Dialogue) (*Dialogue, error) {
+	offset := 0
+
+	// Skip OID if present (tag 0x06)
+	if offset < len(data) && data[offset] == 0x06 {
+		oidLen := int(data[offset+1])
+		offset += 2 + oidLen
+	}
+
+	// Look for context-specific tag (0xa0) containing AARQ
+	if offset < len(data) && data[offset] == 0xa0 {
+		offset++ // Skip tag
+
+		// Parse length
+		if data[offset]&0x80 == 0 {
+			offset++
+		} else {
+			numOctets := int(data[offset] & 0x7F)
+			offset += 1 + numOctets
+		}
+
+		// Parse AARQ (tag 0x60)
+		if offset < len(data) && data[offset] == 0x60 {
+			aarqLen := int(data[offset+1])
+			if offset+2+aarqLen <= len(data) {
+				aarqData := data[offset : offset+2+aarqLen]
+
+				// Parse DialoguePDU
+				dialoguePDU, err := ParseDialoguePDU(aarqData)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse DialoguePDU: %w", err)
+				}
+				d.DialoguePDU = dialoguePDU
+
+				return d, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no valid dialogue PDU found in data")
+}*/
+
 // UnmarshalBinary sets the values retrieved from byte sequence in an Dialogue.
 /*func (d *Dialogue) UnmarshalBinary(b []byte) error {
 	l := len(b)
