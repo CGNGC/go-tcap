@@ -136,9 +136,6 @@ func NewReturnResult(invID int, opCode uint8, isLocal, isLast bool, param []byte
 
 	c := &Component{
 		Type: NewContextSpecificConstructorTag(tag),
-		ResultRetres: &IE{
-			Tag: NewUniversalConstructorTag(0x10),
-		},
 		InvokeID: &IE{
 			Tag:    NewUniversalPrimitiveTag(2),
 			Length: 1,
@@ -231,11 +228,8 @@ func (c *Components) MarshalBinary() ([]byte, error) {
 	}
 	return b, nil
 }
-
-// MarshalTo puts the byte sequence in the byte array given as b.
 func (c *Components) MarshalTo(b []byte) error {
 	b[0] = uint8(c.Tag)
-	b[1] = c.Length
 
 	cursor := 2
 	for _, comp := range c.Component {
@@ -245,22 +239,30 @@ func (c *Components) MarshalTo(b []byte) error {
 		}
 		cursor += compLen
 	}
-	return nil
-}
 
-// MarshalBinary returns the byte sequence generated from a Components instance.
-func (c *Component) MarshalBinary() ([]byte, error) {
-	b := make([]byte, c.MarshalLen())
-	if err := c.MarshalTo(b); err != nil {
-		return nil, err
+	actualLength := cursor - 2
+
+	if actualLength < 128 {
+		b[1] = byte(actualLength)
+	} else if actualLength <= 255 {
+
+		copy(b[3:3+(cursor-2)], b[2:cursor])
+		b[1] = 0x81
+		b[2] = byte(actualLength)
+	} else {
+
+		copy(b[4:4+(cursor-2)], b[2:cursor])
+		b[1] = byte(actualLength >> 16)
+		b[2] = byte(actualLength >> 8)
+		b[3] = byte(actualLength)
 	}
-	return b, nil
+
+	return nil
 }
 
 // MarshalTo puts the byte sequence in the byte array given as b.
 func (c *Component) MarshalTo(b []byte) error {
 	b[0] = uint8(c.Type)
-	b[1] = c.Length
 
 	var offset = 2
 	if field := c.InvokeID; field != nil {
@@ -287,30 +289,56 @@ func (c *Component) MarshalTo(b []byte) error {
 		}
 
 		if field := c.Parameter; field != nil {
-			if err := field.MarshalTo(b[offset : offset+field.MarshalLen()]); err != nil {
-				return err
-			}
+			copy(b[offset:], field.Value)
+			offset += len(field.Value)
 		}
+
 	case ReturnResultLast, ReturnResultNotLast:
-		if field := c.ResultRetres; field != nil {
-			if err := field.MarshalTo(b[offset : offset+field.MarshalLen()]); err != nil {
-				return err
+		if c.OperationCode != nil || c.Parameter != nil {
+
+			seqContentLen := 0
+
+			if field := c.OperationCode; field != nil {
+				seqContentLen += field.MarshalLen()
 			}
-			offset += field.MarshalLen()
+
+			if field := c.Parameter; field != nil {
+				seqContentLen += len(field.Value)
+			}
+
+			b[offset] = 0x30 // SEQUENCE tag
+			offset++
+
+			if seqContentLen < 128 {
+				// Short form
+				b[offset] = byte(seqContentLen)
+				offset++
+			} else if seqContentLen <= 255 {
+				// Long form (1 byte)
+				b[offset] = 0x81
+				b[offset+1] = byte(seqContentLen)
+				offset += 2
+			} else {
+				// Long form (2 bytes)
+				b[offset] = 0x82
+				b[offset+1] = byte(seqContentLen >> 8)
+				b[offset+2] = byte(seqContentLen & 0xFF)
+				offset += 3
+			}
+
+			if field := c.OperationCode; field != nil {
+				if err := field.MarshalTo(b[offset : offset+field.MarshalLen()]); err != nil {
+					return err
+				}
+				offset += field.MarshalLen()
+			}
+
+			if field := c.Parameter; field != nil {
+				copy(b[offset:], field.Value)
+				offset += len(field.Value)
+			}
 		}
 
-		if field := c.OperationCode; field != nil {
-			if err := field.MarshalTo(b[offset : offset+field.MarshalLen()]); err != nil {
-				return err
-			}
-			offset += field.MarshalLen()
-		}
-
-		if field := c.Parameter; field != nil {
-			if err := field.MarshalTo(b[offset : offset+field.MarshalLen()]); err != nil {
-				return err
-			}
-		}
 	case ReturnError:
 		if field := c.ErrorCode; field != nil {
 			if err := field.MarshalTo(b[offset : offset+field.MarshalLen()]); err != nil {
@@ -323,7 +351,9 @@ func (c *Component) MarshalTo(b []byte) error {
 			if err := field.MarshalTo(b[offset : offset+field.MarshalLen()]); err != nil {
 				return err
 			}
+			offset += field.MarshalLen()
 		}
+
 	case Reject:
 		if field := c.ProblemCode; field != nil {
 			if err := field.MarshalTo(b[offset : offset+field.MarshalLen()]); err != nil {
@@ -331,6 +361,24 @@ func (c *Component) MarshalTo(b []byte) error {
 			}
 		}
 	}
+
+	actualLength := offset - 2
+
+	if actualLength < 128 {
+		b[1] = byte(actualLength)
+	} else if actualLength <= 255 {
+
+		copy(b[3:3+(offset-2)], b[2:offset])
+		b[1] = 0x81
+		b[2] = byte(actualLength)
+	} else {
+
+		copy(b[4:4+(offset-2)], b[2:offset])
+		b[1] = 0x82
+		b[2] = byte(actualLength >> 8)
+		b[3] = byte(actualLength & 0xFF)
+	}
+
 	return nil
 }
 
@@ -399,13 +447,6 @@ func (c *Component) UnmarshalBinary(b []byte) error {
 
 	switch c.Type.Code() {
 	case Invoke:
-		/* TODO: Implement LinkedID Parser.
-		c.LinkedID, err = ParseIE(b[offset:])
-		if err != nil {
-			return err
-		}
-		offset += c.LinkedID.MarshalLen()
-		*/
 		c.OperationCode, err = ParseIE(b[offset:])
 		if err != nil {
 			return err
@@ -466,23 +507,60 @@ func (c *Component) UnmarshalBinary(b []byte) error {
 // setParameterFromBytes sets the Parameter field from given bytes.
 //
 // It sets the value as it is if the given bytes cannot be parsed as (a set of) IE.
+// func (c *Component) setParameterFromBytes(b []byte) error {
 func (c *Component) setParameterFromBytes(b []byte) error {
 	if b == nil {
 		return io.ErrUnexpectedEOF
 	}
 
+	// Handle context-specific tags with long-form length encoding
 	if len(b) >= 2 && (b[0] >= 0xa0 && b[0] <= 0xaf) {
 		tag := b[0]
-		length := b[1]
-		value := b[2:]
+		lengthByte := b[1]
+
+		var actualLength uint8
+		var valueStart int
+
+		if lengthByte < 0x80 {
+			// Short form: length is in the byte itself
+			actualLength = lengthByte
+			valueStart = 2
+		} else if lengthByte == 0x81 {
+			// Long form (1 byte): next byte contains the length
+			if len(b) < 3 {
+				return fmt.Errorf("insufficient data for long-form length")
+			}
+			actualLength = b[2]
+			valueStart = 3
+		} else if lengthByte == 0x82 {
+			// Long form (2 bytes): next 2 bytes contain the length
+			if len(b) < 4 {
+				return fmt.Errorf("insufficient data for 2-byte long-form length")
+			}
+			// For uint8 Length field, we can only store up to 255
+			// If actual length > 255, truncate (this is a limitation of the IE struct)
+			fullLength := int(b[2])<<8 | int(b[3])
+			if fullLength > 255 {
+				actualLength = 255
+				logf("Warning: Length %d exceeds uint8, truncating to 255", fullLength)
+			} else {
+				actualLength = uint8(fullLength)
+			}
+			valueStart = 4
+		} else {
+			return fmt.Errorf("unsupported length encoding: 0x%02x", lengthByte)
+		}
+
+		value := b[valueStart:]
 
 		c.Parameter = &IE{
 			Tag:    Tag(tag),
-			Length: length,
+			Length: actualLength,
 			Value:  value,
 		}
 
-		logf("Extracted ASN.1 structure - Tag: 0x%02x, Length: 0x%02x, Value: %x", tag, length, value)
+		logf("Extracted ASN.1 structure - Tag: 0x%02x, Length: %d (from encoding: 0x%02x), Value: %x",
+			tag, actualLength, lengthByte, value[:min(20, len(value))])
 		return nil
 	}
 
@@ -573,50 +651,90 @@ func (c *Components) SetValsFrom(berParsed *IE) error {
 
 // MarshalLen returns the serial length of Components.
 func (c *Components) MarshalLen() int {
-	var l = 2
+	// Start with tag + length byte(s)
+	contentLen := 0
+
+	// Calculate total content length
 	for _, comp := range c.Component {
-		l += comp.MarshalLen()
+		contentLen += comp.MarshalLen()
 	}
-	return l
+
+	// Determine header size based on content length
+	headerSize := 2 // Tag + 1 length byte (short form)
+
+	if contentLen >= 128 && contentLen <= 255 {
+		headerSize = 3 // Tag + 0x81 + 1 length byte
+	} else if contentLen > 255 {
+		headerSize = 4 // Tag + 0x82 + 2 length bytes
+	}
+
+	return headerSize + contentLen
 }
 
 // MarshalLen returns the serial length of Component.
 func (c *Component) MarshalLen() int {
-	var l = 2 + c.InvokeID.MarshalLen()
+	// Start with InvokeID
+	contentLen := c.InvokeID.MarshalLen()
+
 	switch c.Type.Code() {
 	case Invoke:
 		if field := c.LinkedID; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 		if field := c.OperationCode; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 		if field := c.Parameter; field != nil {
-			l += field.MarshalLen()
+			contentLen += len(field.Value)
 		}
 	case ReturnResultLast, ReturnResultNotLast:
-		if field := c.ResultRetres; field != nil {
-			l += field.MarshalLen()
+		if c.OperationCode != nil || c.Parameter != nil {
+
+			seqContentLen := 0
+
+			if field := c.OperationCode; field != nil {
+				seqContentLen += field.MarshalLen()
+			}
+
+			if field := c.Parameter; field != nil {
+				seqContentLen += len(c.Parameter.Value)
+			}
+			fmt.Printf("MarshalLen: Parameter.Value length=%d, MarshalLen()=%d\n",
+				len(c.Parameter.Value), c.Parameter.MarshalLen())
+
+			seqHeaderSize := 2 // Tag + 1 length byte (short form)
+
+			if seqContentLen >= 128 && seqContentLen <= 255 {
+				seqHeaderSize = 3 // Tag + 0x81 + 1 length byte
+			} else if seqContentLen > 255 {
+				seqHeaderSize = 4 // Tag + 0x82 + 2 length bytes
+			}
+			contentLen += seqHeaderSize + seqContentLen
 		}
-		if field := c.OperationCode; field != nil {
-			l += field.MarshalLen()
-		}
-		if field := c.Parameter; field != nil {
-			l += field.MarshalLen()
-		}
+
 	case ReturnError:
 		if field := c.ErrorCode; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 		if field := c.Parameter; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
+
 	case Reject:
 		if field := c.ProblemCode; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 	}
-	return l
+
+	headerSize := 2 // Tag + 1 length byte (short form)
+
+	if contentLen >= 128 && contentLen <= 255 {
+		headerSize = 3 // Tag + 0x81 + 1 length byte
+	} else if contentLen > 255 {
+		headerSize = 4 // Tag + 0x82 + 2 length bytes
+	}
+
+	return headerSize + contentLen
 }
 
 // SetLength sets the length in Length field.
@@ -627,10 +745,8 @@ func (c *Components) SetLength() {
 		c.Length += uint8(comp.MarshalLen())
 	}
 }
-
-// SetLength sets the length in Length field.
 func (c *Component) SetLength() {
-	l := 0
+	// Set length for all child fields first
 	if field := c.InvokeID; field != nil {
 		field.SetLength()
 	}
@@ -639,28 +755,52 @@ func (c *Component) SetLength() {
 	}
 	if field := c.OperationCode; field != nil {
 		field.SetLength()
-		l += c.OperationCode.MarshalLen()
 	}
 	if field := c.ErrorCode; field != nil {
 		field.SetLength()
-		l += c.ErrorCode.MarshalLen()
 	}
+
+	// For Invoke, Parameter.Length should be len(Value) not MarshalLen()
 	if field := c.Parameter; field != nil {
-		field.SetLength()
-		l += c.Parameter.MarshalLen()
+		if c.Type.Code() == Invoke {
+			// For Invoke, Parameter contains raw bytes (no tag/length wrapper)
+			field.Length = uint8(len(field.Value))
+		} else if c.Type.Code() == ReturnError {
+			if field := c.Parameter; field != nil {
+				field.SetLength()
+			}
+		} else {
+			field.SetLength()
+		}
 	}
 	if field := c.ProblemCode; field != nil {
 		field.SetLength()
-		l += c.ProblemCode.MarshalLen()
 	}
 	if field := c.SequenceTag; field != nil {
 		field.SetLength()
-		l += c.SequenceTag.MarshalLen()
 	}
 	if field := c.ResultRetres; field != nil {
+		// For backward compatibility with parsing
+		// Calculate content length for ResultRetres
+		l := 0
+		if c.OperationCode != nil {
+			l += c.OperationCode.MarshalLen()
+		}
+		if c.Parameter != nil {
+			l += len(c.Parameter.Value)
+		}
 		field.Length = uint8(l)
 	}
-	c.Length = uint8(c.MarshalLen() - 2)
+	//  Use MarshalLen() which has the correct calculation
+	// MarshalLen() already handles ReturnResult SEQUENCE wrapper correctly
+	if c.Type.Code() == Invoke && c.Parameter != nil {
+		fmt.Printf("Invoke Parameter: Value length=%d, MarshalLen=%d",
+			len(c.Parameter.Value), c.Parameter.MarshalLen())
+	}
+
+	finalLen := c.MarshalLen() - 2
+	fmt.Printf("Component SetLength: Type=0x%02x, Calculated=%d", c.Type, finalLen)
+	c.Length = uint8(finalLen)
 }
 
 // ComponentTypeString returns the Component Type in string.

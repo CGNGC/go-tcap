@@ -146,12 +146,12 @@ func (t *Transaction) MarshalBinary() ([]byte, error) {
 	return b, nil
 }
 
-// MarshalTo puts the byte sequence in the byte array given as b.
 func (t *Transaction) MarshalTo(b []byte) error {
 	b[0] = uint8(t.Type)
-	b[1] = t.Length
 
+	// Write all content at offset 2 first
 	var offset = 2
+
 	switch t.Type.Code() {
 	case Unidirectional:
 		break
@@ -198,7 +198,27 @@ func (t *Transaction) MarshalTo(b []byte) error {
 			offset += field.MarshalLen()
 		}
 	}
-	copy(b[offset:t.MarshalLen()], t.Payload)
+	copy(b[offset:], t.Payload)
+	offset += len(t.Payload)
+
+	// Calculate actual length (DTID + Payload)
+	actualLength := offset - 2
+
+	// Write length with long-form encoding
+	if actualLength < 128 {
+		b[1] = byte(actualLength)
+	} else if actualLength <= 255 {
+
+		copy(b[3:3+(offset-2)], b[2:offset])
+		b[1] = 0x81
+		b[2] = byte(actualLength)
+	} else {
+
+		copy(b[4:4+(offset-2)], b[2:offset])
+		b[1] = 0x82
+		b[2] = byte(actualLength >> 8)
+		b[3] = byte(actualLength & 0xFF)
+	}
 	return nil
 }
 
@@ -279,34 +299,47 @@ func (t *Transaction) SetValsFrom(berParsed *IE) error {
 
 // MarshalLen returns the serial length of Transaction.
 func (t *Transaction) MarshalLen() int {
-	l := 2
+	// Calculate content length (DTID/OTID + Payload)
+	contentLen := 0
+
 	switch t.Type.Code() {
 	case Unidirectional:
 		break
 	case Begin:
 		if field := t.OrigTransactionID; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 	case End:
 		if field := t.DestTransactionID; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 	case Continue:
 		if field := t.OrigTransactionID; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 		if field := t.DestTransactionID; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 	case Abort:
 		if field := t.DestTransactionID; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 		if field := t.PAbortCause; field != nil {
-			l += field.MarshalLen()
+			contentLen += field.MarshalLen()
 		}
 	}
-	return l + len(t.Payload)
+
+	contentLen += len(t.Payload)
+
+	//  Calculate header size based on content length
+	headerSize := 2 // Tag + 1 length byte (short form)
+
+	if contentLen >= 128 && contentLen <= 255 {
+		headerSize = 3 // Tag + 0x81 + 1 length byte
+	} else if contentLen > 255 {
+		headerSize = 4 // Tag + 0x82 + 2 length bytes
+	}
+	return headerSize + contentLen
 }
 
 // SetLength sets the length in Length field.

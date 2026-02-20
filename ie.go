@@ -115,7 +115,7 @@ func (i *IE) MarshalBinary() ([]byte, error) {
 }
 
 // MarshalTo puts the byte sequence in the byte array given as b.
-func (i *IE) MarshalTo(b []byte) error {
+/*func (i *IE) MarshalTo(b []byte) error {
 	if len(b) < 2 {
 		return io.ErrUnexpectedEOF
 	}
@@ -123,6 +123,41 @@ func (i *IE) MarshalTo(b []byte) error {
 	b[0] = uint8(i.Tag)
 	b[1] = i.Length
 	copy(b[2:i.MarshalLen()], i.Value)
+	return nil
+}*/
+
+// MarshalTo puts the byte sequence in the byte array given as b.
+func (i *IE) MarshalTo(b []byte) error {
+	if len(b) < 2 {
+		return io.ErrUnexpectedEOF
+	}
+
+	b[0] = uint8(i.Tag)
+
+	//  Support long-form BER length encoding
+	valueLen := len(i.Value)
+	var offset int
+
+	if valueLen < 128 {
+		// Short form
+		b[1] = byte(valueLen)
+		offset = 2
+	} else if valueLen <= 255 {
+		// Long form (1 byte)
+		b[1] = 0x81
+		b[2] = byte(valueLen)
+		offset = 3
+	} else if valueLen <= 65535 {
+		// Long form (2 bytes)
+		b[1] = 0x82
+		b[2] = byte(valueLen >> 8)
+		b[3] = byte(valueLen & 0xFF)
+		offset = 4
+	} else {
+		return fmt.Errorf("IE value too large: %d bytes", valueLen)
+	}
+
+	copy(b[offset:], i.Value)
 	return nil
 }
 
@@ -244,8 +279,23 @@ func (i *IE) ParseRecursive(b []byte) error {
 }
 
 // MarshalLen returns the serial length of IE.
-func (i *IE) MarshalLen() int {
+/*func (i *IE) MarshalLen() int {
 	return 2 + len(i.Value)
+}*/
+// MarshalLen returns the serial length of IE.
+func (i *IE) MarshalLen() int {
+	valueLen := len(i.Value)
+
+	// Tag + length encoding + value
+	if valueLen < 128 {
+		return 1 + 1 + valueLen // Tag + 1 length byte + value
+	} else if valueLen <= 255 {
+		return 1 + 2 + valueLen // Tag + 0x81 + 1 length byte + value
+	} else if valueLen <= 65535 {
+		return 1 + 3 + valueLen // Tag + 0x82 + 2 length bytes + value
+	}
+
+	return 1 + 1 + valueLen // Fallback to short form
 }
 
 // SetLength sets the length in Length field.
