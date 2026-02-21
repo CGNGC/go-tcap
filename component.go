@@ -97,6 +97,15 @@ func NewComponents(comps ...*Component) *Components {
 	return c
 }
 
+// MarshalBinary returns the byte sequence generated from a Components instance.
+func (c *Component) MarshalBinary() ([]byte, error) {
+	b := make([]byte, c.MarshalLen())
+	if err := c.MarshalTo(b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 // NewInvoke returns a new single Invoke Component.
 func NewInvoke(invID int, lkID int, opCode uint8, isLocal bool, param []byte) *Component {
 	c := &Component{

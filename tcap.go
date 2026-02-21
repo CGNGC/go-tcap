@@ -133,6 +133,10 @@ func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
 	payload := t.Transaction.Payload
 	payloadOffset := 0
 
+	if len(payload) < 2 {
+		fmt.Printf("Payload too short: %d bytes\n", len(payload))
+		return nil, nil
+	}
 	//  Check for Dialogue Portion FIRST (tag 0x6b) - SKIP IT
 	if payloadOffset < len(payload) && payload[payloadOffset] == 0x6b {
 		lengthOffset := payloadOffset + 1
@@ -183,10 +187,13 @@ func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
 	}
 
 parseComponents:
+	if payloadOffset >= len(payload) {
+		fmt.Printf("Reached end of payload - dialogue-only message\n")
+		return nil, nil // ← RETURN HERE for dialogue-only
+	}
 	//  Check for Component Portion (tag 0x6c)
-	if payloadOffset < len(payload) && payload[payloadOffset] == 0x6c {
-		fmt.Printf(" Found component portion at offset %d\n", payloadOffset)
-
+	if payload[payloadOffset] == 0x6c {
+		fmt.Printf("Found component portion at offset %d\n", payloadOffset)
 		componentLength := int(payload[payloadOffset+1])
 
 		if payloadOffset+2+componentLength > len(payload) {
@@ -214,6 +221,7 @@ parseComponents:
 	} else {
 		fmt.Printf("  No component portion found at offset %d (tag: 0x%02x)\n",
 			payloadOffset, payload[payloadOffset])
+		return nil, nil
 	}
 
 	return nil, nil
