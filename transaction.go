@@ -60,7 +60,6 @@ func NewTransaction(mtype int, otid, dtid uint32, cause uint8, payload []byte) *
 	binary.BigEndian.PutUint32(t.OrigTransactionID.Value, otid)
 	binary.BigEndian.PutUint32(t.DestTransactionID.Value, dtid)
 	t.SetLength()
-
 	return t
 }
 

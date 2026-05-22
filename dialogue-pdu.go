@@ -238,31 +238,6 @@ func NewABRT(abortsrc uint8, userinfo ...*IE) *DialoguePDU {
 	return d
 }
 
-/*
-// NewAUDT returns a new AUDT(Unidirectional Dialogue).
-func NewAUDT(protover int, context, contextver uint8, userinfo ...*IE) *DialoguePDU {
-	d := NewDialoguePDU(
-		AUDT,
-		protover,
-		context,
-		contextver,
-		0,
-		0,
-		0,
-		0,
-	)
-	if len(userinfo) > 0 {
-		d.UserInformation = userinfo[0]
-	}
-	d.ProtocolVersion.Clear()
-	d.ApplicationContextName.Clear()
-	d.Result.Clear()
-	d.ResultSourceDiagnostic.Clear()
-	d.SetLength()
-
-	return d
-}
-*/
 
 // MarshalBinary returns the byte sequence generated from a DialoguePDU.
 func (d *DialoguePDU) MarshalBinary() ([]byte, error) {

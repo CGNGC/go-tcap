@@ -131,7 +131,6 @@ func NewInvoke(invID int, lkID int, opCode uint8, isLocal bool, param []byte) *C
 			logf("failed to build Parameter: %v", err)
 		}
 	}
-
 	c.SetLength()
 	return c
 }
@@ -708,8 +707,6 @@ func (c *Component) MarshalLen() int {
 			if field := c.Parameter; field != nil {
 				seqContentLen += len(c.Parameter.Value)
 			}
-			fmt.Printf("MarshalLen: Parameter.Value length=%d, MarshalLen()=%d\n",
-				len(c.Parameter.Value), c.Parameter.MarshalLen())
 
 			seqHeaderSize := 2 // Tag + 1 length byte (short form)
 
@@ -746,70 +743,97 @@ func (c *Component) MarshalLen() int {
 	return headerSize + contentLen
 }
 
-// SetLength sets the length in Length field.
-func (c *Components) SetLength() {
-	c.Length = 0
-	for _, comp := range c.Component {
-		comp.SetLength()
-		c.Length += uint8(comp.MarshalLen())
-	}
-}
 func (c *Component) SetLength() {
-	// Set length for all child fields first
-	if field := c.InvokeID; field != nil {
-		field.SetLength()
-	}
-	if field := c.LinkedID; field != nil {
-		field.SetLength()
-	}
-	if field := c.OperationCode; field != nil {
-		field.SetLength()
-	}
-	if field := c.ErrorCode; field != nil {
-		field.SetLength()
+	// Child fields already have their lengths set during construction
+
+	contentLen := 0
+
+	// InvokeID: tag(1) + length(1) + value
+	if c.InvokeID != nil {
+		contentLen += 2 + int(c.InvokeID.Length)
 	}
 
-	// For Invoke, Parameter.Length should be len(Value) not MarshalLen()
-	if field := c.Parameter; field != nil {
-		if c.Type.Code() == Invoke {
-			// For Invoke, Parameter contains raw bytes (no tag/length wrapper)
-			field.Length = uint8(len(field.Value))
-		} else if c.Type.Code() == ReturnError {
-			if field := c.Parameter; field != nil {
-				field.SetLength()
-			}
-		} else {
-			field.SetLength()
+	switch c.Type.Code() {
+	case Invoke:
+		// LinkedID: tag(1) + length(1) + value
+		if c.LinkedID != nil {
+			contentLen += 2 + int(c.LinkedID.Length)
 		}
-	}
-	if field := c.ProblemCode; field != nil {
-		field.SetLength()
-	}
-	if field := c.SequenceTag; field != nil {
-		field.SetLength()
-	}
-	if field := c.ResultRetres; field != nil {
-		// For backward compatibility with parsing
-		// Calculate content length for ResultRetres
-		l := 0
+
+		// OperationCode: tag(1) + length(1) + value
 		if c.OperationCode != nil {
-			l += c.OperationCode.MarshalLen()
+			contentLen += 2 + int(c.OperationCode.Length)
 		}
+
+		// Parameter: raw bytes (no wrapper for Invoke)
 		if c.Parameter != nil {
-			l += len(c.Parameter.Value)
+			contentLen += len(c.Parameter.Value)
 		}
-		field.Length = uint8(l)
-	}
-	//  Use MarshalLen() which has the correct calculation
-	// MarshalLen() already handles ReturnResult SEQUENCE wrapper correctly
-	if c.Type.Code() == Invoke && c.Parameter != nil {
-		fmt.Printf("Invoke Parameter: Value length=%d, MarshalLen=%d",
-			len(c.Parameter.Value), c.Parameter.MarshalLen())
+
+	case ReturnResultLast, ReturnResultNotLast:
+		if c.OperationCode != nil || c.Parameter != nil {
+			// Calculate SEQUENCE content
+			seqContentLen := 0
+
+			if c.OperationCode != nil {
+				seqContentLen += 2 + int(c.OperationCode.Length)
+			}
+
+			if c.Parameter != nil {
+				seqContentLen += len(c.Parameter.Value)
+			}
+
+			// SEQUENCE header size
+			seqHeaderSize := 2
+			if seqContentLen >= 128 && seqContentLen <= 255 {
+				seqHeaderSize = 3
+			} else if seqContentLen > 255 {
+				seqHeaderSize = 4
+			}
+
+			contentLen += seqHeaderSize + seqContentLen
+		}
+
+	case ReturnError:
+		if c.ErrorCode != nil {
+			contentLen += 2 + int(c.ErrorCode.Length)
+		}
+
+		if c.Parameter != nil {
+			contentLen += 2 + len(c.Parameter.Value)
+		}
+
+	case Reject:
+		if c.ProblemCode != nil {
+			contentLen += 2 + int(c.ProblemCode.Length)
+		}
 	}
 
-	finalLen := c.MarshalLen() - 2
-	fmt.Printf("Component SetLength: Type=0x%02x, Calculated=%d", c.Type, finalLen)
-	c.Length = uint8(finalLen)
+	// Set length directly (no MarshalLen call)
+	c.Length = uint8(contentLen)
+}
+
+func (c *Components) SetLength() {
+	// OPTIMIZED: Calculate total length without redundant calls
+	totalLen := 0
+
+	for _, comp := range c.Component {
+		// Each component already has its length set
+		// Just add: tag(1) + length_field + content
+		compContentLen := int(comp.Length)
+
+		// Determine length field size
+		lengthFieldSize := 1
+		if compContentLen >= 128 && compContentLen <= 255 {
+			lengthFieldSize = 2
+		} else if compContentLen > 255 {
+			lengthFieldSize = 3
+		}
+
+		totalLen += 1 + lengthFieldSize + compContentLen
+	}
+
+	c.Length = uint8(totalLen)
 }
 
 // ComponentTypeString returns the Component Type in string.

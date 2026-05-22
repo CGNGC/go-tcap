@@ -134,7 +134,6 @@ func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
 	payloadOffset := 0
 
 	if len(payload) < 2 {
-		fmt.Printf("Payload too short: %d bytes\n", len(payload))
 		return nil, nil
 	}
 	//  Check for Dialogue Portion FIRST (tag 0x6b) - SKIP IT
@@ -142,7 +141,6 @@ func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
 		lengthOffset := payloadOffset + 1
 
 		if lengthOffset >= len(payload) {
-			fmt.Printf("Warning: dialogue tag found but no length byte\n")
 			payloadOffset++
 			goto parseComponents
 		}
@@ -177,9 +175,6 @@ func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
 			payloadOffset += 2 + numLengthOctets + dialogueLength
 		}
 
-		fmt.Printf("Skipped dialogue portion (%d bytes), now at offset %d\n",
-			dialogueLength, payloadOffset)
-
 		t.Dialogue = &Dialogue{
 			Tag:    0x6b,
 			Length: uint8(dialogueLength),
@@ -188,12 +183,10 @@ func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
 
 parseComponents:
 	if payloadOffset >= len(payload) {
-		fmt.Printf("Reached end of payload - dialogue-only message\n")
-		return nil, nil // ← RETURN HERE for dialogue-only
+		return nil, nil // dialogue only
 	}
 	//  Check for Component Portion (tag 0x6c)
 	if payload[payloadOffset] == 0x6c {
-		fmt.Printf("Found component portion at offset %d\n", payloadOffset)
 		componentLength := int(payload[payloadOffset+1])
 
 		if payloadOffset+2+componentLength > len(payload) {
@@ -201,7 +194,6 @@ parseComponents:
 		}
 
 		componentData := payload[payloadOffset : payloadOffset+2+componentLength]
-		fmt.Printf("Component data (%d bytes): %x\n", len(componentData), componentData)
 
 		t.Components, err = ParseComponents(componentData)
 		if err != nil {
@@ -214,13 +206,10 @@ parseComponents:
 		if t.Components != nil && len(t.Components.Component) > 0 {
 			if t.Components.Component[0].Parameter != nil {
 				mapData := t.Components.Component[0].Parameter.Value
-				fmt.Printf("Extracted MAP data (%d bytes): %x\n", len(mapData), mapData)
 				return mapData, nil
 			}
 		}
 	} else {
-		fmt.Printf("  No component portion found at offset %d (tag: 0x%02x)\n",
-			payloadOffset, payload[payloadOffset])
 		return nil, nil
 	}
 
@@ -281,35 +270,45 @@ func (t *TCAP) MarshalLen() int {
 }
 
 func (t *TCAP) SetLength() {
+	// Set lengths first
 	if portion := t.Components; portion != nil {
 		portion.SetLength()
 	}
 	if portion := t.Dialogue; portion != nil {
 		portion.SetLength()
 	}
+
 	if portion := t.Transaction; portion != nil {
 		portion.SetLength()
-		fmt.Printf("SetLength: Before clearing Payload, len=%d", len(portion.Payload))
-		portion.Payload = []byte{}
-		var payloadBuf []byte
 
+		// Build payload using MarshalLen (faster than MarshalBinary)
+		portion.Payload = []byte{}
+
+		// Calculate total payload size
+		payloadSize := 0
+		if d := t.Dialogue; d != nil {
+			payloadSize += d.MarshalLen()
+		}
+		if c := t.Components; c != nil {
+			payloadSize += c.MarshalLen()
+		}
+
+		// Pre-allocate buffer
+		payloadBuf := make([]byte, 0, payloadSize)
+
+		// Marshal directly into buffer
 		if d := t.Dialogue; d != nil {
 			dBuf, _ := d.MarshalBinary()
-			fmt.Printf("SetLength: Dialogue marshaled, len=%d", len(dBuf))
 			payloadBuf = append(payloadBuf, dBuf...)
 		}
 
 		if c := t.Components; c != nil {
 			cBuf, _ := c.MarshalBinary()
-			fmt.Printf("SetLength: Components marshaled, len=%d", len(cBuf))
 			payloadBuf = append(payloadBuf, cBuf...)
 		}
 
 		portion.Payload = payloadBuf
-		fmt.Printf("SetLength: After populating Payload, len=%d", len(portion.Payload))
-
 	}
-
 }
 
 // OTID returns the TCAP Originating Transaction ID in Transaction Portion in uint32.
@@ -437,11 +436,3 @@ func (t *TCAP) LayerPayload() [][]byte {
 	return nil
 }
 
-// String returns TCAP in human readable string.
-func (t *TCAP) String() string {
-	return fmt.Sprintf("{Transaction: %v, Dialogue: %v, Components: %v}",
-		t.Transaction,
-		t.Dialogue,
-		t.Components,
-	)
-}

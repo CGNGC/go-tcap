@@ -115,18 +115,6 @@ func (i *IE) MarshalBinary() ([]byte, error) {
 }
 
 // MarshalTo puts the byte sequence in the byte array given as b.
-/*func (i *IE) MarshalTo(b []byte) error {
-	if len(b) < 2 {
-		return io.ErrUnexpectedEOF
-	}
-
-	b[0] = uint8(i.Tag)
-	b[1] = i.Length
-	copy(b[2:i.MarshalLen()], i.Value)
-	return nil
-}*/
-
-// MarshalTo puts the byte sequence in the byte array given as b.
 func (i *IE) MarshalTo(b []byte) error {
 	if len(b) < 2 {
 		return io.ErrUnexpectedEOF
@@ -278,10 +266,6 @@ func (i *IE) ParseRecursive(b []byte) error {
 	return nil
 }
 
-// MarshalLen returns the serial length of IE.
-/*func (i *IE) MarshalLen() int {
-	return 2 + len(i.Value)
-}*/
 // MarshalLen returns the serial length of IE.
 func (i *IE) MarshalLen() int {
 	valueLen := len(i.Value)
