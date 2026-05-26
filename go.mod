@@ -1,4 +1,4 @@
-module github.com/cgngc/go-tcap
+module github.com/CGNGC/go-tcap
 
 go 1.21
 
