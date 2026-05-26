@@ -7,5 +7,4 @@ require (
 	github.com/pascaldekloe/goe v0.1.1
 	github.com/wmnsk/go-m3ua v0.1.11
 	github.com/wmnsk/go-sccp v0.0.5
-	github.com/wmnsk/go-tcap v0.0.0-20260105100943-25327262deb6
 )
