@@ -1,4 +1,4 @@
-module github.com/CGNGC/go-tcap
+module github.com/cgnc/go-tcap
 
 go 1.21
 
@@ -7,5 +7,5 @@ require (
 	github.com/pascaldekloe/goe v0.1.1
 	github.com/wmnsk/go-m3ua v0.1.9
 	github.com/wmnsk/go-sccp v0.0.2
-	github.com/CGNGC/go-tcap v1.0.0-20250507162811-c749d15c5937
+	github.com/cgngc/go-tcap v1.0.0-20250507162811-c749d15c5937
 )
