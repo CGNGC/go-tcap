@@ -250,13 +250,16 @@ func (i *IE) ParseRecursive(b []byte) error {
 
 	i.Tag = Tag(b[0])
 	i.Length = b[1]
-	if int(i.Length)+2 > len(b) {
-		return nil
+
+	totalLen := 2 + int(i.Length)
+	if totalLen > len(b) {
+		return io.ErrUnexpectedEOF
 	}
-	i.Value = b[2 : 2+int(i.Length)]
+
+	i.Value = b[:totalLen]
 
 	if i.Tag.Form() == 1 {
-		x, err := ParseAsBER(i.Value)
+		x, err := ParseAsBER(b[2:totalLen])
 		if err != nil {
 			return nil
 		}

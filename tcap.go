@@ -136,7 +136,7 @@ func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
 	if len(payload) < 2 {
 		return nil, nil
 	}
-	//  Check for Dialogue Portion FIRST (tag 0x6b) - SKIP IT
+
 	if payloadOffset < len(payload) && payload[payloadOffset] == 0x6b {
 		lengthOffset := payloadOffset + 1
 
@@ -149,8 +149,14 @@ func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
 		lengthByte := payload[lengthOffset]
 
 		if lengthByte&0x80 == 0 {
-			// Short form
 			dialogueLength = int(lengthByte)
+			dialogueBytes := payload[payloadOffset : payloadOffset+2+dialogueLength]
+			parsedDialogue, err := ParseDialogue(dialogueBytes)
+			if err != nil {
+				t.Dialogue = &Dialogue{Tag: 0x6b, Length: uint8(dialogueLength)}
+			} else {
+				t.Dialogue = parsedDialogue
+			}
 			payloadOffset += 2 + dialogueLength
 		} else {
 			// Long form
@@ -172,12 +178,15 @@ func (t *TCAP) UnmarshalBinary(b []byte) ([]byte, error) {
 			for i := 0; i < numLengthOctets; i++ {
 				dialogueLength = (dialogueLength << 8) | int(payload[lengthOffset+1+i])
 			}
-			payloadOffset += 2 + numLengthOctets + dialogueLength
-		}
 
-		t.Dialogue = &Dialogue{
-			Tag:    0x6b,
-			Length: uint8(dialogueLength),
+			dialogueBytes := payload[payloadOffset : payloadOffset+2+numLengthOctets+dialogueLength]
+			parsedDialogue, err := ParseDialogue(dialogueBytes)
+			if err != nil {
+				t.Dialogue = &Dialogue{Tag: 0x6b, Length: uint8(dialogueLength)}
+			} else {
+				t.Dialogue = parsedDialogue
+			}
+			payloadOffset += 2 + numLengthOctets + dialogueLength
 		}
 	}
 
@@ -185,7 +194,7 @@ parseComponents:
 	if payloadOffset >= len(payload) {
 		return nil, nil // dialogue only
 	}
-	//  Check for Component Portion (tag 0x6c)
+	// Check for Component Portion (tag 0x6c)
 	if payload[payloadOffset] == 0x6c {
 		componentLength := int(payload[payloadOffset+1])
 
@@ -202,7 +211,7 @@ parseComponents:
 
 		payloadOffset += 2 + componentLength
 
-		//  Return the MAP data from component parameter
+		// Return the MAP data from component parameter
 		if t.Components != nil && len(t.Components.Component) > 0 {
 			if t.Components.Component[0].Parameter != nil {
 				mapData := t.Components.Component[0].Parameter.Value
@@ -435,4 +444,3 @@ func (t *TCAP) LayerPayload() [][]byte {
 
 	return nil
 }
-
