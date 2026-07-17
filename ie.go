@@ -213,6 +213,11 @@ func ParseAsBER(b []byte) ([]*IE, error) {
 			return nil, err
 		}
 		ies = append(ies, i)
+		advance := i.MarshalLen()
+
+		if advance > len(b) {
+			return nil, io.ErrUnexpectedEOF
+		}
 
 		if len(i.IE) == 0 {
 			b = b[i.MarshalLen():]
@@ -223,6 +228,9 @@ func ParseAsBER(b []byte) ([]*IE, error) {
 			var l = 2
 			for _, ie := range i.IE {
 				l += ie.MarshalLen()
+			}
+			if l > len(b) {
+				return nil, io.ErrUnexpectedEOF
 			}
 			b = b[l:]
 			continue
